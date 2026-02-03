@@ -1,71 +1,78 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8" />
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Today Planner</title>
 
 <style>
-  :root {
-    --bg: #f4f4f4;
-    --card: #ffffff;
-    --text: #000;
-  }
-  body.dark {
-    --bg: #121212;
-    --card: #1e1e1e;
-    --text: #fff;
-  }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: sans-serif;
-    margin: 0;
-    padding: 16px;
-  }
-  .card {
-    background: var(--card);
-    border-radius: 12px;
-    padding: 16px;
-    margin-bottom: 16px;
-  }
-  input, button {
-    width: 100%;
-    padding: 10px;
-    margin-top: 6px;
-  }
-  .todo {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 8px;
-  }
+:root {
+  --bg:#f4f4f4;
+  --card:#fff;
+  --text:#000;
+}
+body.dark {
+  --bg:#121212;
+  --card:#1e1e1e;
+  --text:#fff;
+}
+body {
+  margin:0;
+  padding:16px;
+  background:var(--bg);
+  color:var(--text);
+  font-family:sans-serif;
+}
+button,input {
+  width:100%;
+  padding:10px;
+  margin-top:6px;
+}
+.card {
+  background:var(--card);
+  padding:16px;
+  border-radius:12px;
+  margin-bottom:16px;
+}
+.todo {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-top:8px;
+}
+.done {
+  text-decoration:line-through;
+  opacity:0.6;
+}
 </style>
 </head>
 
 <body>
+
 <button onclick="toggleDark()">🌙 ダークモード</button>
 
-<div class="card">
-  <h2>前日入力（最大3つ）</h2>
+<div class="card" id="planInput">
+  <h2>🌙 明日の予定を入力（最大3）</h2>
   <div id="inputs"></div>
   <button onclick="savePlan()">保存</button>
 </div>
 
-<div class="card">
-  <h2>今日のTo Do</h2>
+<div class="card" id="todayArea">
+  <h2>☀ 今日のTo Do</h2>
   <div id="todayTodos"></div>
   <p>今日の達成率：<span id="todayRate">0%</span></p>
 </div>
 
 <div class="card">
-  <h2>統計</h2>
+  <h2>📊 統計</h2>
   <p>累積達成数：<span id="totalDone">0</span></p>
   <p>全体達成率：<span id="totalRate">0%</span></p>
 </div>
 
 <script>
-const planKey = "plan";
-const statKey = "stats";
+const PLAN_KEY = "today_plan";
+const STAT_KEY = "stats";
+const DATE_KEY = "date";
 
 const inputs = document.getElementById("inputs");
 for(let i=0;i<3;i++){
@@ -76,84 +83,110 @@ for(let i=0;i<3;i++){
   `;
 }
 
+// 🌙 前日夜判定
+function isNight(){
+  const h = new Date().getHours();
+  return h >= 20 || h < 3;
+}
+
+// 🔁 画面自動切替
+function autoSwitch(){
+  document.getElementById("planInput").style.display =
+    isNight() ? "block" : "none";
+  document.getElementById("todayArea").style.display =
+    isNight() ? "none" : "block";
+}
+
+// 💾 日付変更でリセット
+const today = new Date().toISOString().slice(0,10);
+if(localStorage.getItem(DATE_KEY) !== today){
+  localStorage.setItem(DATE_KEY, today);
+  localStorage.setItem(PLAN_KEY, JSON.stringify([]));
+}
+
+// 📝 保存
 function savePlan(){
   const plan = [];
   for(let i=0;i<3;i++){
-    const text = document.getElementById(`todo${i}`).value;
-    const time = document.getElementById(`time${i}`).value;
-    const want = document.getElementById(`want${i}`).value;
-    if(text && time){
-      plan.push({text, time, want, done:false});
-      setAlarm(text, time, want);
+    const t = todo${i}.value;
+    const time = time${i}.value;
+    const w = want${i}.value;
+    if(t && time){
+      plan.push({text:t,time, want:w, done:false});
+      setAlarm(t,time,w);
     }
   }
-  localStorage.setItem(planKey, JSON.stringify(plan));
-  renderToday();
+  localStorage.setItem(PLAN_KEY, JSON.stringify(plan));
+  alert("保存しました");
 }
 
-function renderToday(){
-  const area = document.getElementById("todayTodos");
-  area.innerHTML = "";
-  const plan = JSON.parse(localStorage.getItem(planKey)) || [];
-  let done = 0;
+// ⏰ アラーム
+function setAlarm(text,time,want){
+  if(Notification.permission!=="granted"){
+    Notification.requestPermission();
+  }
+  const [h,m]=time.split(":");
+  const now=new Date();
+  const alarm=new Date();
+  alarm.setHours(h,m,0);
+  const delay=alarm-now;
+  if(delay>0){
+    setTimeout(()=>{
+      new Notification("⏰ To Do",{
+        body:`${text}\nWant: ${want}`
+      });
+    },delay);
+  }
+}
 
-  plan.forEach((t,i)=>{
-    if(t.done) done++;
-    area.innerHTML += `
-      <div class="todo">
-        <span onclick="toggleDone(${i})">${t.text} (${t.time})</span>
-        <input type="checkbox" ${t.done?"checked":""}>
+// 📋 今日表示
+function renderToday(){
+  const area=document.getElementById("todayTodos");
+  const plan=JSON.parse(localStorage.getItem(PLAN_KEY))||[];
+  area.innerHTML="";
+  let done=0;
+  plan.forEach((p,i)=>{
+    if(p.done) done++;
+    area.innerHTML+=`
+      <div class="todo ${p.done?"done":""}">
+        <span onclick="toggleDone(${i})">
+          ${p.text} (${p.time})
+        </span>
+        <input type="checkbox" ${p.done?"checked":""}>
       </div>
     `;
   });
-
   document.getElementById("todayRate").textContent =
     plan.length ? Math.round(done/plan.length*100)+"%" : "0%";
-
-  updateStats(done, plan.length);
+  updateStats(done,plan.length);
 }
 
+// ✅ 完了切替
 function toggleDone(i){
-  const plan = JSON.parse(localStorage.getItem(planKey));
-  plan[i].done = !plan[i].done;
-  localStorage.setItem(planKey, JSON.stringify(plan));
+  const plan=JSON.parse(localStorage.getItem(PLAN_KEY));
+  plan[i].done=!plan[i].done;
+  localStorage.setItem(PLAN_KEY,JSON.stringify(plan));
   renderToday();
 }
 
-function updateStats(doneToday, totalToday){
-  const stats = JSON.parse(localStorage.getItem(statKey)) || {done:0,total:0};
-  stats.done += doneToday;
-  stats.total += totalToday;
-  localStorage.setItem(statKey, JSON.stringify(stats));
-
-  document.getElementById("totalDone").textContent = stats.done;
-  document.getElementById("totalRate").textContent =
-    stats.total ? Math.round(stats.done/stats.total*100)+"%" : "0%";
+// 📈 統計
+function updateStats(d,t){
+  let s=JSON.parse(localStorage.getItem(STAT_KEY))||{done:0,total:0};
+  s.done+=d;
+  s.total+=t;
+  localStorage.setItem(STAT_KEY,JSON.stringify(s));
+  totalDone.textContent=s.done;
+  totalRate.textContent=s.total?
+    Math.round(s.done/s.total*100)+"%":"0%";
 }
 
-function setAlarm(text, time, want){
-  if(Notification.permission !== "granted"){
-    Notification.requestPermission();
-  }
-  const now = new Date();
-  const alarm = new Date();
-  const [h,m] = time.split(":");
-  alarm.setHours(h,m,0);
-
-  const delay = alarm - now;
-  if(delay > 0){
-    setTimeout(()=>{
-      new Notification("⏰ To Do アラーム",{
-        body: `${text}\nWant: ${want}`
-      });
-    }, delay);
-  }
-}
-
+// 🌗 ダークモード
 function toggleDark(){
   document.body.classList.toggle("dark");
 }
 
+// 初期化
+autoSwitch();
 renderToday();
 </script>
 </body>
